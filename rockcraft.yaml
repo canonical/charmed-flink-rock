@@ -50,7 +50,7 @@ parts:
         $CRAFT_PART_INSTALL/usr/bin/keytool
 
       curl -fsSL \
-        "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin.tgz" \
+        "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-scala_2.12.tgz" \
         -o /tmp/flink.tgz
       tar -xzf /tmp/flink.tgz -C $CRAFT_PART_INSTALL/
       mv $CRAFT_PART_INSTALL/flink-${FLINK_VERSION} $CRAFT_PART_INSTALL/flink
