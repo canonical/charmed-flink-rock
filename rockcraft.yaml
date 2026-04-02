@@ -1,6 +1,5 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
----
 name: charmed-flink
 base: ubuntu@22.04
 version: '2.2.0'

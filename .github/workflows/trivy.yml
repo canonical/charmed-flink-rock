@@ -6,13 +6,15 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   scan:
     name: Trivy scan and SBOM generation
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       matrix:
         arch: [amd64, arm64]

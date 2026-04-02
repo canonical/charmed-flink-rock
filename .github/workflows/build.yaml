@@ -37,30 +37,6 @@ jobs:
     needs:
       - lint
     steps:
-      - name: Disk cleanup
-        run: |
-          sudo rm -rf \
-            /opt/google \
-            /opt/hostedtoolcache \
-            /opt/microsoft/powershell \
-            /opt/microsoft/msedge \
-            "$AGENT_TOOLSDIRECTORY" \
-            /usr/lib/firefox \
-            /usr/lib/mono \
-            /usr/local/julia* \
-            /usr/local/lib/android \
-            /usr/local/share/chromium \
-            /usr/local/share/powershell \
-            /usr/share/dotnet \
-            /usr/share/gradle* \
-            /usr/share/miniconda \
-            /usr/share/sbt \
-            /usr/share/swift \
-            /home/linuxbrew
-          pipx uninstall-all
-          printf '\nDisk usage\n'
-          df --human-readable
-
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -86,7 +62,7 @@ jobs:
       - name: Add additional labels
         run: |
           COMMIT_ID=$(git log -1 --format=%H)
-          DESCRIPTION=$(yq .description rockcraft.yaml | xargs)
+          DESCRIPTION=$(yq .description rockcraft.yaml)
           FILE=${{ steps.build.outputs.rock }}
 
           rockcraft.skopeo copy "oci-archive:${FILE}" oci:to_process:latest
