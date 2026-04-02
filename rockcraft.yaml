@@ -1,0 +1,85 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+---
+name: charmed-flink  # the name of your ROCK
+base: ubuntu@22.04  # the base environment for this ROCK
+version: '1.18.1'  # just for humans. Semantic versioning is recommended
+summary: Charmed Flink ROCK OCI  # 79 char long summary
+description: |
+  This is an OCI image that bundles Apache Flink together with other tools
+  of its ecosystem in order to be used in Charmed Operators, providing
+  automated operations management from day 0 to day 2 on the Apache Flink
+  stream processing framework, on top of a Virtual Machine cluster and K8s
+  cluster. It is an open source, end-to-end, production ready data platform
+  on top of cloud native technologies.
+license: Apache-2.0  # your application's SPDX license
+
+platforms:  # The platforms this ROCK should be built on and run on
+  amd64:
+
+services:
+  flink:
+    override: replace
+    command: /opt/flink/bin/jobmanager.sh start-foreground
+    startup: enabled
+    user: flink
+    group: flink
+    environment:
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      FLINK_HOME: /opt/flink
+
+parts:
+  flink:
+    plugin: nil
+    stage-packages:
+      - openjdk-11-jre-headless
+      - libpsl5
+      - curl
+    build-environment:
+      - JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      - FLINK_VERSION: "1.18.1"
+      - FLINK_SCALA_VERSION: "2.12"
+    override-build: |
+      ln -s /usr/lib/jvm/java-11-openjdk-amd64/bin/java \
+        $CRAFT_PART_INSTALL/usr/bin/java
+      ln -s /usr/lib/jvm/java-11-openjdk-amd64/bin/keytool \
+        $CRAFT_PART_INSTALL/usr/bin/keytool
+
+      # Download Apache Flink binary
+      curl -fsSL \
+        "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-scala_${FLINK_SCALA_VERSION}.tgz" \
+        -o /tmp/flink.tgz
+      tar -xzf /tmp/flink.tgz -C /tmp/
+
+      # Making core dirs
+      mkdir -p $CRAFT_PART_INSTALL/var/lib/pebble/default/
+      mkdir -p $CRAFT_PART_INSTALL/var/lib/flink/
+      mkdir -p $CRAFT_PART_INSTALL/var/log/flink/
+      mkdir -p $CRAFT_PART_INSTALL/opt/flink/
+      mkdir -p $CRAFT_PART_INSTALL/etc/flink/
+
+      # Copy Flink distribution
+      cp -r /tmp/flink-${FLINK_VERSION}/bin $CRAFT_PART_INSTALL/opt/flink/
+      cp -r /tmp/flink-${FLINK_VERSION}/lib $CRAFT_PART_INSTALL/opt/flink/
+      cp -r /tmp/flink-${FLINK_VERSION}/opt $CRAFT_PART_INSTALL/opt/flink/
+      cp -r /tmp/flink-${FLINK_VERSION}/plugins $CRAFT_PART_INSTALL/opt/flink/
+      cp -r /tmp/flink-${FLINK_VERSION}/conf $CRAFT_PART_INSTALL/etc/flink/
+
+      # Link config dir into Flink home
+      ln -s /etc/flink $CRAFT_PART_INSTALL/opt/flink/conf
+
+  non-root-user:
+    plugin: nil
+    after: [flink]
+    overlay-script: |
+      # Create a user in the $CRAFT_OVERLAY chroot
+      groupadd -R $CRAFT_OVERLAY -g 1000 flink
+      useradd -R $CRAFT_OVERLAY -M -r -g flink -u 1000 flink
+    override-prime: |
+      craftctl default
+      # Give permission to the required folders
+      install -d -o 1000 -g 1000 -m 770 \
+        opt/flink \
+        var/lib/flink \
+        var/log/flink \
+        etc/flink

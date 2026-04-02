@@ -1,0 +1,113 @@
+name: Publish ROCK
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1-22.04
+
+jobs:
+
+  release_checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract branch metadata
+        shell: bash
+        run: |
+          BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
+          # echo "risk=${BRANCH##*\/}" >> $GITHUB_OUTPUT
+          echo "risk=edge" >> $GITHUB_OUTPUT
+          echo "track=${BRANCH%*\/*}" >> $GITHUB_OUTPUT
+        id: branch_metadata
+
+      - name: Extract ROCK metadata
+        shell: bash
+        run: |
+          VERSION=$(yq '(.version|split("-"))[0]' rockcraft.yaml)
+          BASE=$(yq '(.base|split("@"))[1]' rockcraft.yaml)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "base=${BASE}" >> $GITHUB_OUTPUT
+        id: rock_metadata
+
+      - name: Check consistency between metadata and release branch
+        run: |
+          MAJOR_VERSION=$(echo ${{ steps.rock_metadata.outputs.version }} | sed -n "s/\(^[0-9]*\).*/\1/p")
+          BASE=${{ steps.rock_metadata.outputs.base }}
+          if [ "${MAJOR_VERSION}-${BASE}" != "${{ steps.branch_metadata.outputs.track }}" ]; then exit 1; fi
+        continue-on-error: false
+
+    outputs:
+      branch: ${{ steps.branch_metadata.outputs.branch }}
+      track: ${{ steps.branch_metadata.outputs.track }}
+      risk: ${{ steps.branch_metadata.outputs.risk }}
+      base: ${{ steps.rock_metadata.outputs.base }}
+      version: ${{ steps.rock_metadata.outputs.version }}
+
+  build:
+    permissions: {}
+    uses: ./.github/workflows/build.yaml
+
+  publish:
+    needs: [build, release_checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo snap install yq
+          sudo snap install rockcraft --classic --edge
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: charmed-flink
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Import and push to GHCR
+        run: |
+      
+          RISK=${{ needs.release_checks.outputs.risk }}
+          TRACK=${{ needs.release_checks.outputs.track }}
+          if [ ! -z "$RISK" ] && [ "${RISK}" != "no-risk" ]; then TAG=${TRACK}_${RISK}; else TAG=${TRACK}; fi
+      
+          IMAGE_NAME="ghcr.io/canonical/charmed-flink"
+
+          ROCK_FILE=${{ needs.build.outputs.rock }}
+
+          sudo rockcraft.skopeo --insecure-policy copy \
+            oci-archive:${ROCK_FILE} \
+            docker-daemon:${IMAGE_NAME}:${TAG}
+
+          COMMIT_ID=$(git log -1 --format=%H)
+          DESCRIPTION=$(yq .description rockcraft.yaml | xargs)
+          
+          # Add relevant labels
+          echo "FROM ${IMAGE_NAME}:${TAG}" | docker build --label org.opencontainers.image.description="${DESCRIPTION}" --label org.opencontainers.image.revision="${COMMIT_ID}" --label org.opencontainers.image.source="${{ github.repositoryUrl }}" -t "${IMAGE_NAME}:${TAG}" -
+
+          echo "Publishing ${IMAGE_NAME}:${TAG}"          
+          docker push ${IMAGE_NAME}:${TAG}
+          
+          if [[ "$RISK" == "edge" ]]; then           
+            VERSION_TAG="${{ needs.release_checks.outputs.version }}-${{ needs.release_checks.outputs.base }}_edge"
+            
+            docker tag ${IMAGE_NAME}:${TAG} ${IMAGE_NAME}:${VERSION_TAG}
+            
+            echo "Publishing ${IMAGE_NAME}:${VERSION_TAG}"          
+            docker push ${IMAGE_NAME}:${VERSION_TAG}
+          fi

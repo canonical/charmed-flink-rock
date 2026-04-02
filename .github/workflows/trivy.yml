@@ -1,0 +1,66 @@
+name: Trivy Security Scanner
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 1-22.04
+  pull_request:
+jobs:
+  build:
+    permissions: {}
+    uses: ./.github/workflows/build.yaml
+  scan:
+    name: Trivy scan and SBOM Generation
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install rockcraft (for skopeo)
+        run: |
+          sudo snap install rockcraft --classic --edge
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: charmed-flink
+      - name: Import locally
+        run: |
+          sudo rockcraft.skopeo --insecure-policy copy \
+            oci-archive:${{ needs.build.outputs.rock }} \
+            docker-daemon:trivy/charmed-flink:test
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'trivy/charmed-flink:test'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'MEDIUM,HIGH,CRITICAL'
+          cache: 'false'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy in GitHub SBOM mode and submit results to Dependency Graph
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          format: 'spdx-json'
+          output: 'dependency-results.sbom.json'
+          image-ref: 'trivy/charmed-flink:test'
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
+          severity: "MEDIUM,HIGH,CRITICAL"
+          scanners: "vuln"
+
+      - name: Upload trivy report as a Github artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sbom-report
+          path: '${{ github.workspace }}/dependency-results.sbom.json'
+          retention-days: 90
