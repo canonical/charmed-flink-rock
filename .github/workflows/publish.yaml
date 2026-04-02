@@ -26,87 +26,41 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install dependencies
+      - name: Install tooling
         run: |
+          sudo snap install rockcraft --channel latest/edge --classic
+          sudo snap alias rockcraft.skopeo skopeo
           sudo snap install yq
-          sudo snap install rockcraft --classic --edge
-
-      - name: Extract metadata
-        id: metadata
-        shell: bash
-        run: |
-          VERSION=$(yq '.version' rockcraft.yaml)
-          BASE=$(yq '(.base|split("@"))[1]' rockcraft.yaml)
-          BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
-          TRACK=${BRANCH%/*}
-          RISK=${BRANCH##*/}
-          if ! echo "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+'; then
-            echo "Unexpected version format in rockcraft.yaml: ${VERSION}"
-            exit 1
-          fi
-          MAJOR_MINOR=$(echo "${VERSION}" | sed -n "s/\(^[0-9]*\.[0-9]*\).*/\1/p")
-          if [ "${MAJOR_MINOR}" != "${TRACK}" ]; then
-            echo "Version mismatch: rockcraft.yaml version ${VERSION} does not match branch ${BRANCH}"
-            exit 1
-          fi
-          TAG="${TRACK}_${RISK}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "base=${BASE}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "risk=${RISK}" >> $GITHUB_OUTPUT
-
-      - name: Download amd64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: charmed-flink-amd64
-
-      - name: Download arm64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: charmed-flink-arm64
+          pipx install git+https://github.com/canonical/data-platform-workflows#subdirectory=_cli
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: unused
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish multi-arch image to GHCR
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: charmed-flink-amd64
+          path: to_publish
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: charmed-flink-arm64
+          path: to_publish
+
+      - name: Publish to GHCR
         run: |
-          VERSION=${{ steps.metadata.outputs.version }}
-          TAG=${{ steps.metadata.outputs.tag }}
-          IMAGE_NAME="ghcr.io/canonical/charmed-flink"
-
-          sudo rockcraft.skopeo --insecure-policy copy \
-            oci-archive:charmed-flink_${VERSION}_amd64.rock \
-            docker-daemon:${IMAGE_NAME}:${TAG}-amd64
-
-          sudo rockcraft.skopeo --insecure-policy copy \
-            oci-archive:charmed-flink_${VERSION}_arm64.rock \
-            docker-daemon:${IMAGE_NAME}:${TAG}-arm64
-
-          docker push ${IMAGE_NAME}:${TAG}-amd64
-          docker push ${IMAGE_NAME}:${TAG}-arm64
-
-          docker manifest create ${IMAGE_NAME}:${TAG} \
-            ${IMAGE_NAME}:${TAG}-amd64 \
-            ${IMAGE_NAME}:${TAG}-arm64
-
-          docker manifest push ${IMAGE_NAME}:${TAG}
-          echo "Published ${IMAGE_NAME}:${TAG}"
-
-          if [[ "${{ steps.metadata.outputs.risk }}" == "edge" ]]; then
-            VERSION_TAG="${VERSION}-${{ steps.metadata.outputs.base }}_edge"
-            docker manifest create ${IMAGE_NAME}:${VERSION_TAG} \
-              ${IMAGE_NAME}:${TAG}-amd64 \
-              ${IMAGE_NAME}:${TAG}-arm64
-            docker manifest push ${IMAGE_NAME}:${VERSION_TAG}
-            echo "Published ${IMAGE_NAME}:${VERSION_TAG}"
-          fi
+          cp rockcraft.yaml to_publish/
+          release-rock --directory=to_publish/ --create-tags=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

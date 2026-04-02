@@ -18,14 +18,14 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install rockcraft (for skopeo)
         run: |
           sudo snap install rockcraft --classic --edge
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: charmed-flink-${{ matrix.arch }}
 
@@ -55,7 +55,7 @@ jobs:
           cache: "false"
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
@@ -73,7 +73,7 @@ jobs:
           scanners: "vuln"
 
       - name: Upload trivy report as a Github artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-sbom-report-${{ matrix.arch }}
           path: "${{ github.workspace }}/dependency-results-${{ matrix.arch }}.sbom.json"
