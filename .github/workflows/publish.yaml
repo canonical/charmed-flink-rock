@@ -1,61 +1,30 @@
 name: Publish ROCK
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
     branches:
-      - 1-22.04
+      - "2.2/edge"
+
+permissions:
+  contents: read
 
 jobs:
-
-  release_checks:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract branch metadata
-        shell: bash
-        run: |
-          BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
-          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
-          # echo "risk=${BRANCH##*\/}" >> $GITHUB_OUTPUT
-          echo "risk=edge" >> $GITHUB_OUTPUT
-          echo "track=${BRANCH%*\/*}" >> $GITHUB_OUTPUT
-        id: branch_metadata
-
-      - name: Extract ROCK metadata
-        shell: bash
-        run: |
-          VERSION=$(yq '(.version|split("-"))[0]' rockcraft.yaml)
-          BASE=$(yq '(.base|split("@"))[1]' rockcraft.yaml)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "base=${BASE}" >> $GITHUB_OUTPUT
-        id: rock_metadata
-
-      - name: Check consistency between metadata and release branch
-        run: |
-          MAJOR_VERSION=$(echo ${{ steps.rock_metadata.outputs.version }} | sed -n "s/\(^[0-9]*\).*/\1/p")
-          BASE=${{ steps.rock_metadata.outputs.base }}
-          if [ "${MAJOR_VERSION}-${BASE}" != "${{ steps.branch_metadata.outputs.track }}" ]; then exit 1; fi
-        continue-on-error: false
-
-    outputs:
-      branch: ${{ steps.branch_metadata.outputs.branch }}
-      track: ${{ steps.branch_metadata.outputs.track }}
-      risk: ${{ steps.branch_metadata.outputs.risk }}
-      base: ${{ steps.rock_metadata.outputs.base }}
-      version: ${{ steps.rock_metadata.outputs.version }}
-
   build:
-    permissions: {}
     uses: ./.github/workflows/build.yaml
 
+  trivy:
+    needs: build
+    uses: ./.github/workflows/trivy.yml
+
   publish:
-    needs: [build, release_checks]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    needs: [build, trivy]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -68,46 +37,76 @@ jobs:
           sudo snap install yq
           sudo snap install rockcraft --classic --edge
 
-      - uses: actions/download-artifact@v4
+      - name: Extract metadata
+        id: metadata
+        shell: bash
+        run: |
+          VERSION=$(yq '.version' rockcraft.yaml)
+          BASE=$(yq '(.base|split("@"))[1]' rockcraft.yaml)
+          BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}
+          TRACK=${BRANCH%/*}
+          RISK=${BRANCH##*/}
+          if ! echo "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+'; then
+            echo "Unexpected version format in rockcraft.yaml: ${VERSION}"
+            exit 1
+          fi
+          MAJOR_MINOR=$(echo "${VERSION}" | sed -n "s/\(^[0-9]*\.[0-9]*\).*/\1/p")
+          if [ "${MAJOR_MINOR}" != "${TRACK}" ]; then
+            echo "Version mismatch: rockcraft.yaml version ${VERSION} does not match branch ${BRANCH}"
+            exit 1
+          fi
+          TAG="${TRACK}_${RISK}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "base=${BASE}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "risk=${RISK}" >> $GITHUB_OUTPUT
+
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
         with:
-          name: charmed-flink
+          name: charmed-flink-amd64
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: charmed-flink-arm64
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Import and push to GHCR
+      - name: Publish multi-arch image to GHCR
         run: |
-      
-          RISK=${{ needs.release_checks.outputs.risk }}
-          TRACK=${{ needs.release_checks.outputs.track }}
-          if [ ! -z "$RISK" ] && [ "${RISK}" != "no-risk" ]; then TAG=${TRACK}_${RISK}; else TAG=${TRACK}; fi
-      
+          VERSION=${{ steps.metadata.outputs.version }}
+          TAG=${{ steps.metadata.outputs.tag }}
           IMAGE_NAME="ghcr.io/canonical/charmed-flink"
 
-          ROCK_FILE=${{ needs.build.outputs.rock }}
+          sudo rockcraft.skopeo --insecure-policy copy \
+            oci-archive:charmed-flink_${VERSION}_amd64.rock \
+            docker-daemon:${IMAGE_NAME}:${TAG}-amd64
 
           sudo rockcraft.skopeo --insecure-policy copy \
-            oci-archive:${ROCK_FILE} \
-            docker-daemon:${IMAGE_NAME}:${TAG}
+            oci-archive:charmed-flink_${VERSION}_arm64.rock \
+            docker-daemon:${IMAGE_NAME}:${TAG}-arm64
 
-          COMMIT_ID=$(git log -1 --format=%H)
-          DESCRIPTION=$(yq .description rockcraft.yaml | xargs)
-          
-          # Add relevant labels
-          echo "FROM ${IMAGE_NAME}:${TAG}" | docker build --label org.opencontainers.image.description="${DESCRIPTION}" --label org.opencontainers.image.revision="${COMMIT_ID}" --label org.opencontainers.image.source="${{ github.repositoryUrl }}" -t "${IMAGE_NAME}:${TAG}" -
+          docker push ${IMAGE_NAME}:${TAG}-amd64
+          docker push ${IMAGE_NAME}:${TAG}-arm64
 
-          echo "Publishing ${IMAGE_NAME}:${TAG}"          
-          docker push ${IMAGE_NAME}:${TAG}
-          
-          if [[ "$RISK" == "edge" ]]; then           
-            VERSION_TAG="${{ needs.release_checks.outputs.version }}-${{ needs.release_checks.outputs.base }}_edge"
-            
-            docker tag ${IMAGE_NAME}:${TAG} ${IMAGE_NAME}:${VERSION_TAG}
-            
-            echo "Publishing ${IMAGE_NAME}:${VERSION_TAG}"          
-            docker push ${IMAGE_NAME}:${VERSION_TAG}
+          docker manifest create ${IMAGE_NAME}:${TAG} \
+            ${IMAGE_NAME}:${TAG}-amd64 \
+            ${IMAGE_NAME}:${TAG}-arm64
+
+          docker manifest push ${IMAGE_NAME}:${TAG}
+          echo "Published ${IMAGE_NAME}:${TAG}"
+
+          if [[ "${{ steps.metadata.outputs.risk }}" == "edge" ]]; then
+            VERSION_TAG="${VERSION}-${{ steps.metadata.outputs.base }}_edge"
+            docker manifest create ${IMAGE_NAME}:${VERSION_TAG} \
+              ${IMAGE_NAME}:${TAG}-amd64 \
+              ${IMAGE_NAME}:${TAG}-arm64
+            docker manifest push ${IMAGE_NAME}:${VERSION_TAG}
+            echo "Published ${IMAGE_NAME}:${VERSION_TAG}"
           fi
