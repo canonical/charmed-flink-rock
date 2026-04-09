@@ -1,0 +1,87 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+name: charmed-flink
+base: ubuntu@22.04
+version: '2.2.0'
+summary: Charmed Apache Flink ROCK OCI
+description: |
+  This is an OCI image that bundles Apache Flink together with other tools
+  of its ecosystem in order to be used in Charmed Operators, providing
+  automated operations management from day 0 to day 2 on the Apache Flink
+  stream processing framework, on top of a K8s cluster. It is an open source,
+  end-to-end, production ready data platform on top of cloud native
+  technologies.
+license: Apache-2.0
+
+platforms:
+  amd64:
+  arm64:
+
+run_user: _daemon_
+
+services:
+  flink:
+    override: replace
+    command: /opt/flink/bin/jobmanager.sh start-foreground
+    startup: enabled
+    environment:
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk
+      FLINK_HOME: /opt/flink
+
+parts:
+  flink:
+    plugin: nil
+    stage-packages:
+      - openjdk-17-jre-headless
+    build-packages:
+      - libpsl5
+      - curl
+    build-environment:
+      - JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}
+      - FLINK_VERSION: "2.2.0"
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/usr/lib/jvm/
+      # Create an arch-independent symlink so JAVA_HOME works on both amd64 and arm64
+      ln -sf /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR} \
+        $CRAFT_PART_INSTALL/usr/lib/jvm/java-17-openjdk
+      ln -s /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}/bin/java \
+        $CRAFT_PART_INSTALL/usr/bin/java
+      ln -s /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}/bin/keytool \
+        $CRAFT_PART_INSTALL/usr/bin/keytool
+
+      curl -fsSL \
+        "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-scala_2.12.tgz" \
+        -o /tmp/flink.tgz
+      tar -xzf /tmp/flink.tgz -C $CRAFT_PART_INSTALL/
+      mv $CRAFT_PART_INSTALL/flink-${FLINK_VERSION} $CRAFT_PART_INSTALL/flink
+
+      mkdir -p $CRAFT_PART_INSTALL/var/lib/pebble/default/
+      mkdir -p $CRAFT_PART_INSTALL/var/lib/flink/
+      mkdir -p $CRAFT_PART_INSTALL/var/log/flink/
+    organize:
+      flink/bin/: opt/flink/bin/
+      flink/lib/: opt/flink/lib/
+      flink/opt/: opt/flink/opt/
+      flink/plugins/: opt/flink/plugins/
+      flink/conf/: etc/flink/
+    stage:
+      - opt/flink/
+      - etc/flink/
+      - var/lib/pebble/
+      - var/lib/flink/
+      - var/log/flink/
+      - usr/bin/java
+      - usr/bin/keytool
+      - usr/lib/jvm/
+
+  non-root-user:
+    plugin: nil
+    after: [flink]
+    override-prime: |
+      craftctl default
+      ln -sf /etc/flink opt/flink/conf
+      install -d -o 584792 -g 584792 -m 770 \
+        opt/flink \
+        var/lib/flink \
+        var/log/flink \
+        etc/flink
