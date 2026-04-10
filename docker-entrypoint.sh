@@ -23,7 +23,6 @@ COMMAND_HISTORY_SERVER="history-server"
 
 # If unspecified, the hostname of the container is taken as the JobManager address
 JOB_MANAGER_RPC_ADDRESS=${JOB_MANAGER_RPC_ADDRESS:-$(hostname -f)}
-CONF_FILE_DIR="${FLINK_HOME}/conf"
 
 check_priv_user() {
     if [ $(id -u) == 0 ]; then
@@ -54,8 +53,7 @@ copy_plugins_if_required() {
 
 set_config_options() {
     local config_parser_script="$FLINK_HOME/bin/config-parser-utils.sh"
-    # Charmed Apache Flink change instead of $FLINK_HOME/conf
-    local config_dir="${FLINK_CONF_DIR}"
+    local config_dir="${FLINK_HOME}/conf"
     local bin_dir="$FLINK_HOME/bin"
     local lib_dir="$FLINK_HOME/lib"
 

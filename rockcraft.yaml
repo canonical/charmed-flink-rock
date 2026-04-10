@@ -19,32 +19,22 @@ platforms:
   arm64:
 
 run_user: _daemon_
+entrypoint-service: flinkd
 
 environment:
   FLINK_HOME: /opt/flink
-  FLINK_CONF_DIR: /etc/flink/conf
+  FLINK_CONF_DIR: /opt/flink/conf
   JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}
+  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/flink/bin
 
 services:
-  jobmanager:
-    command: "/bin/bash /opt/flink/entrypoint.sh jobmanager"
+  flinkd:
+    command: "/bin/bash /docker-entrypoint.sh [ sleep ]"
+    summary: "Service to startup Flink processes using the Flink entrypoint."
     override: replace
-    startup: disabled
-
-  standalone-job:
-    command: "/bin/bash /opt/flink/entrypoint.sh standalone-job"
-    override: replace
-    startup: disabled
-
-  taskmanager:
-    command: "/bin/bash /opt/flink/entrypoint.sh taskmanager"
-    override: replace
-    startup: disabled
-
-  history-server:
-    command: "/bin/bash /opt/flink/entrypoint.sh history-server"
-    override: replace
-    startup: disabled
+    startup: enabled
+    on-success: shutdown
+    on-failure: shutdown
 
 parts:
   flink:
@@ -56,7 +46,6 @@ parts:
     build-snaps:
       - yq
     override-build: |
-      mkdir -p $CRAFT_PART_INSTALL/etc/flink
       mkdir -p $CRAFT_PART_INSTALL/opt/flink
 
       # Replace default endpoints bind address to use the container's network address
@@ -69,17 +58,14 @@ parts:
         del(.taskmanager.host)
       ' conf/config.yaml
 
-
       cp -r bin $CRAFT_PART_INSTALL/opt/flink/
+      cp -r conf $CRAFT_PART_INSTALL/opt/flink/
       cp -r examples $CRAFT_PART_INSTALL/opt/flink/
       cp -r lib $CRAFT_PART_INSTALL/opt/flink/
       cp -r licenses $CRAFT_PART_INSTALL/opt/flink/
       cp -r opt $CRAFT_PART_INSTALL/opt/flink/
       cp -r plugins $CRAFT_PART_INSTALL/opt/flink/
-
-      cp -r conf $CRAFT_PART_INSTALL/etc/flink/
     stage:
-      - etc/flink
       - opt/flink
 
   charmed-flink:
@@ -87,12 +73,13 @@ parts:
     after: [flink]
     source: .
     stage-packages:
-      # Needed by the entrypoint script
+      # Needed by the entrypoint script for envsubst
       - gettext-base
       - libjemalloc-dev
     organize:
       licenses/*: opt/flink/licenses/
     stage:
+      - docker-entrypoint.sh
       - opt/flink/
       - usr/bin/envsubst
       - usr/lib/*
@@ -108,9 +95,10 @@ parts:
       chown -R ${FLINK_UID}:${FLINK_GID} opt/flink
       chmod -R 750 opt/flink
 
-      chown -R ${FLINK_UID}:${FLINK_GID} etc/flink
-      chmod -R 750 etc/flink
+      chown -R ${FLINK_UID}:${FLINK_GID} docker-entrypoint.sh
+      chmod -R 750 docker-entrypoint.sh
 
       install -d -o ${FLINK_UID} -g ${FLINK_GID} -m 770 \
+        etc/flink \
         var/lib/flink \
         var/log/flink
