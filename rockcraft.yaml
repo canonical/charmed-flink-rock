@@ -1,8 +1,9 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
+
 name: charmed-flink
-base: ubuntu@22.04
-version: '2.2.0'
+base: ubuntu@24.04
+version: "2.2.0"
 summary: Charmed Apache Flink ROCK OCI
 description: |
   This is an OCI image that bundles Apache Flink together with other tools
@@ -19,69 +20,97 @@ platforms:
 
 run_user: _daemon_
 
+environment:
+  FLINK_HOME: /opt/flink
+  FLINK_CONF_DIR: /etc/flink/conf
+  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}
+
 services:
-  flink:
+  jobmanager:
+    command: "/bin/bash /opt/flink/entrypoint.sh jobmanager"
     override: replace
-    command: /opt/flink/bin/jobmanager.sh start-foreground
-    startup: enabled
-    environment:
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk
-      FLINK_HOME: /opt/flink
+    startup: disabled
+
+  standalone-job:
+    command: "/bin/bash /opt/flink/entrypoint.sh standalone-job"
+    override: replace
+    startup: disabled
+
+  taskmanager:
+    command: "/bin/bash /opt/flink/entrypoint.sh taskmanager"
+    override: replace
+    startup: disabled
+
+  history-server:
+    command: "/bin/bash /opt/flink/entrypoint.sh history-server"
+    override: replace
+    startup: disabled
 
 parts:
   flink:
     plugin: nil
-    stage-packages:
+    source: https://dlcdn.apache.org/flink/flink-2.2.0/flink-2.2.0-bin-scala_2.12.tgz
+    source-checksum: sha512/3e6a7d259af85ffaa45aaf1726898d2b1349642ae40cb946f091b2eca3eed165f9f8268b5d10c6f279e9681ceb8cea6ac95bd9b4304946d8877d4f214fff5020
+    overlay-packages:
       - openjdk-17-jre-headless
-    build-packages:
-      - libpsl5
-      - curl
-    build-environment:
-      - JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}
-      - FLINK_VERSION: "2.2.0"
+    build-snaps:
+      - yq
     override-build: |
-      mkdir -p $CRAFT_PART_INSTALL/usr/lib/jvm/
-      # Create an arch-independent symlink so JAVA_HOME works on both amd64 and arm64
-      ln -sf /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR} \
-        $CRAFT_PART_INSTALL/usr/lib/jvm/java-17-openjdk
-      ln -s /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}/bin/java \
-        $CRAFT_PART_INSTALL/usr/bin/java
-      ln -s /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}/bin/keytool \
-        $CRAFT_PART_INSTALL/usr/bin/keytool
+      mkdir -p $CRAFT_PART_INSTALL/etc/flink
+      mkdir -p $CRAFT_PART_INSTALL/opt/flink
 
-      curl -fsSL \
-        "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-scala_2.12.tgz" \
-        -o /tmp/flink.tgz
-      tar -xzf /tmp/flink.tgz -C $CRAFT_PART_INSTALL/
-      mv $CRAFT_PART_INSTALL/flink-${FLINK_VERSION} $CRAFT_PART_INSTALL/flink
+      # Replace default endpoints bind address to use the container's network address
+      # Taken from upstream
+      yq -i '
+        .rest.address = "0.0.0.0" |
+        .rest.bind-address = "0.0.0.0" |
+        .jobmanager.bind-host = "0.0.0.0" |
+        .taskmanager.bind-host = "0.0.0.0" |
+        del(.taskmanager.host)
+      ' conf/config.yaml
 
-      mkdir -p $CRAFT_PART_INSTALL/var/lib/pebble/default/
-      mkdir -p $CRAFT_PART_INSTALL/var/lib/flink/
-      mkdir -p $CRAFT_PART_INSTALL/var/log/flink/
+
+      cp -r bin $CRAFT_PART_INSTALL/opt/flink/
+      cp -r examples $CRAFT_PART_INSTALL/opt/flink/
+      cp -r lib $CRAFT_PART_INSTALL/opt/flink/
+      cp -r licenses $CRAFT_PART_INSTALL/opt/flink/
+      cp -r opt $CRAFT_PART_INSTALL/opt/flink/
+      cp -r plugins $CRAFT_PART_INSTALL/opt/flink/
+
+      cp -r conf $CRAFT_PART_INSTALL/etc/flink/
+    stage:
+      - etc/flink
+      - opt/flink
+
+  charmed-flink:
+    plugin: dump
+    after: [flink]
+    source: .
+    stage-packages:
+      # Needed by the entrypoint script
+      - gettext-base
+      - libjemalloc-dev
     organize:
-      flink/bin/: opt/flink/bin/
-      flink/lib/: opt/flink/lib/
-      flink/opt/: opt/flink/opt/
-      flink/plugins/: opt/flink/plugins/
-      flink/conf/: etc/flink/
+      licenses/*: opt/flink/licenses/
     stage:
       - opt/flink/
-      - etc/flink/
-      - var/lib/pebble/
-      - var/lib/flink/
-      - var/log/flink/
-      - usr/bin/java
-      - usr/bin/keytool
-      - usr/lib/jvm/
+      - usr/bin/envsubst
+      - usr/lib/*
 
   non-root-user:
     plugin: nil
-    after: [flink]
+    after: [flink, charmed-flink]
     override-prime: |
+      FLINK_GID=584792
+      FLINK_UID=584792
+
       craftctl default
-      ln -sf /etc/flink opt/flink/conf
-      install -d -o 584792 -g 584792 -m 770 \
-        opt/flink \
+      chown -R ${FLINK_UID}:${FLINK_GID} opt/flink
+      chmod -R 750 opt/flink
+
+      chown -R ${FLINK_UID}:${FLINK_GID} etc/flink
+      chmod -R 750 etc/flink
+
+      install -d -o ${FLINK_UID} -g ${FLINK_GID} -m 770 \
         var/lib/flink \
-        var/log/flink \
-        etc/flink
+        var/log/flink
