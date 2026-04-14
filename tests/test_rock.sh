@@ -28,7 +28,7 @@ test_example_job() {
     # that the TaskManager outputed one of the expected logs
     echo "Running Flink example job"
 
-    kubectl exec -it "$JUMP_POD_NAME" -n "$NAMESPACE" -- \
+    kubectl exec "$JUMP_POD_NAME" -n "$NAMESPACE" -- \
         /opt/flink/bin/flink run \
         --target kubernetes-application \
         -Dkubernetes.cluster-id="$CLUSTER_ID" \
@@ -41,10 +41,10 @@ test_example_job() {
 
     kubectl wait --for=condition=Available --timeout=30s deploy/${CLUSTER_ID} -n ${NAMESPACE} || exit 1
     wait_for_taskmanager $NAMESPACE
+    echo "Waiting for job completion"
 
-    echo "Display live logs"
-
-    containers_logs=$(kubectl logs -f -l app=${CLUSTER_ID} --all-containers=true --prefix -n ${NAMESPACE} | tee /dev/tty)
+    containers_logs=$(kubectl logs -f -l app=${CLUSTER_ID} --all-containers=true --prefix -n ${NAMESPACE})
+    echo $containers_logs
 
     grep -E "Job [A-Za-z0-9]+ reached terminal state FINISHED" <<<"$containers_logs"
     grep "(ophelia,1)" <<<"$containers_logs"
@@ -116,7 +116,7 @@ test_example_job_archived_s3() {
 
     echo "Running Flink example job"
 
-    kubectl exec -it "$JUMP_POD_NAME" -n "$NAMESPACE" -- \
+    kubectl exec "$JUMP_POD_NAME" -n "$NAMESPACE" -- \
         /opt/flink/bin/flink run \
         --target kubernetes-application \
         -Dkubernetes.cluster-id="$CLUSTER_ID" \
@@ -135,10 +135,10 @@ test_example_job_archived_s3() {
 
     kubectl wait --for=condition=Available --timeout=30s deploy/${CLUSTER_ID} -n ${NAMESPACE} || exit 1
     wait_for_taskmanager $NAMESPACE
+    echo "Waiting for job completion"
 
-    echo "Display live logs"
-
-    containers_logs=$(kubectl logs -f -l app=${CLUSTER_ID} --all-containers=true --prefix -n ${NAMESPACE} | tee /dev/tty)
+    containers_logs=$(kubectl logs -f -l app=${CLUSTER_ID} --all-containers=true --prefix -n ${NAMESPACE})
+    echo $containers_logs
 
     grep -E "Job [A-Za-z0-9]+ reached terminal state FINISHED" <<<"$containers_logs"
     grep "(ophelia,1)" <<<"$containers_logs"
