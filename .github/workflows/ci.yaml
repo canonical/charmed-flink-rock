@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   lint:
+    name: Lint rockcraft.yaml
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -26,16 +27,20 @@ jobs:
         run: tox -e lint
 
   build-rock:
+    name: Build Rock (amd64 and arm64)
     needs: [lint]
     uses: ./.github/workflows/build.yaml
 
   integration:
+    name: Run tests
     needs: [build-rock]
     uses: ./.github/workflows/integration.yaml
 
   trivy:
+    name: CVE Scanning
     needs: [build-rock]
     uses: ./.github/workflows/trivy.yaml
     permissions:
       contents: read
       security-events: write
+      actions: read
