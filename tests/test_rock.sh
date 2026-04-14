@@ -144,6 +144,7 @@ test_example_job_archived_s3() {
     grep "(ophelia,1)" <<<"$containers_logs"
 
     echo "Checking that job can be found in history server"
+    sleep 15 # We set the refresh rate to 5 seconds, so this should give us enough time.
     jobs=$(curl "$(get_hs_service_endpoint)"/jobs/overview | yq '.jobs')
     echo $jobs
     grep "FINISHED" <<<$jobs
