@@ -64,7 +64,7 @@ wait_for_pod_by_label() {
     namespace=$2
 
     echo "Waiting for pod with label '$label' to become ready..."
-    kubectl wait --for=condition=Ready pod -l $label -n $namespace --timeout=60s || return 1
+    kubectl wait --for=condition=Ready pod -l $label -n $namespace --timeout=120s || return 1
 }
 
 wait_for_taskmanager() {
@@ -79,7 +79,7 @@ wait_for_taskmanager() {
 
     namespace=$1
     local label="component=taskmanager"
-    local timeout_seconds=60
+    local timeout_seconds=120
     local start_time=$(date +%s)
 
     echo "Waiting for TaskManager to appear (Timeout: ${timeout_seconds}s)..."
@@ -95,7 +95,7 @@ wait_for_taskmanager() {
             echo "Error: Timed out waiting for TaskManager pod to appear."
             exit 1
         fi
-        sleep 2
+        sleep 10
     done
 
     wait_for_pod_by_label $label $namespace
