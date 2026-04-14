@@ -61,7 +61,6 @@ jobs:
           cat tests/resources/concierge_ci.yaml | yq '.providers.k8s.channel = "${{ matrix.k8s_version }}"' > edited_concierge.yaml
           sudo concierge prepare -c edited_concierge.yaml
 
-          mkdir /home/runner/.kube
           sudo k8s config | tee /home/runner/.kube/config
 
 
