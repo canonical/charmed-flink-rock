@@ -5,7 +5,7 @@
 # Check that kubectl is in the PATH and that it is properly configure to access the
 # K8s cluster.
 if ! kubectl get ns >>/dev/null; then
-    echo "The K8s cluster has not been configured properly. Exiting..."
+    echo "Error: The K8s cluster has not been configured properly. Exiting..."
     exit 1
 fi
 
