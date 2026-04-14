@@ -4,7 +4,6 @@
 
 source ./tests/utils/k8s_utils.sh
 source ./tests/utils/flink_utils.sh
-source ./tests/utils/s3_utils.sh
 
 # Make sure that we have credentials to an S3-compliant object storage
 if [[ -z "$S3_ACCESS_KEY" || -z "$S3_SECRET_KEY" || -z "$S3_ENDPOINT" ]]; then

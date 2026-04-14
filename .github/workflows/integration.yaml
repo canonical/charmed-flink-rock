@@ -63,7 +63,6 @@ jobs:
 
           sudo k8s config | tee /home/runner/.kube/config
 
-
       - name: Setup microceph
         id: microceph
         run: |
@@ -72,7 +71,7 @@ jobs:
           sudo microceph enable rgw
           sudo microceph.radosgw-admin user create --uid test --display-name test --access-key=foo --secret-key=bar
           export IP=$(ip -4 -j route get 2.2.2.2 | jq -r '.[] | .prefsrc')
-          echo -e "S3_SERVER_URL=http://$IP:80/\nS3_ACCESS_KEY=foo\nS3_SECRET_KEY=bar" > .env
+          echo -e "S3_ENDPOINT=http://$IP:80/\nS3_ACCESS_KEY=foo\nS3_SECRET_KEY=bar" > .env
 
           # Create bucket and path
           export AWS_ACCESS_KEY_ID="foo"
@@ -106,4 +105,3 @@ jobs:
       - name: Run tests
         run: |
           just test-rock
-
