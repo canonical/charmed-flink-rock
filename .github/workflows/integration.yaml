@@ -64,9 +64,9 @@ jobs:
           sudo snap install yq
           cat tests/resources/concierge_ci.yaml | yq '.providers.k8s.channel = "${{ matrix.k8s_version }}"' > edited_concierge.yaml
           sudo concierge prepare -c edited_concierge.yaml
-          mkdir -p /home/ubuntu/.kube
-          sudo chown -f -R ubuntu /home/ubuntu/.kube
-          sudo k8s config | tee /home/ubuntu/.kube/config
+
+          mkdir /home/runner/.kube
+          sudo k8s config | tee /home/runner/.kube/config
 
 
       - name: Setup microceph
@@ -78,6 +78,15 @@ jobs:
           sudo microceph.radosgw-admin user create --uid test --display-name test --access-key=foo --secret-key=bar
           export IP=$(ip -4 -j route get 2.2.2.2 | jq -r '.[] | .prefsrc')
           echo -e "S3_SERVER_URL=http://$IP:80/\nS3_ACCESS_KEY=foo\nS3_SECRET_KEY=bar" > .env
+
+          # Create bucket and path
+          export AWS_ACCESS_KEY_ID="foo"
+          export AWS_SECRET_ACCESS_KEY="bar"
+          export AWS_ENDPOINT_URL="http://${IP}:80"
+
+          aws s3 mb s3://test-flink
+          touch .keep
+          aws s3 cp .keep s3://test-flink/flink-events/.keep
 
       - name: Download artifact
         uses: actions/download-artifact@v7
