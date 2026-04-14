@@ -11,8 +11,7 @@ get_flink_version() {
 flink_image() {
     # Construct the image ref from Rock version
 
-    # echo "ghcr.io/canonical/test-charmed-flink:$(get_flink_version)"
-    echo "batalex/charmed-flink:2.2.0-entry4"
+    echo "ghcr.io/canonical/test-charmed-flink:$(get_flink_version)"
 }
 
 launch_jump_host() {

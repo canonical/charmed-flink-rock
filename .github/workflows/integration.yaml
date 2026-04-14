@@ -1,0 +1,105 @@
+# Copyright 2026  Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: Run tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-rock:
+    uses: ./.github/workflows/build.yaml
+
+  integration:
+    runs-on: ${{ matrix.system.os }}
+    timeout-minutes: 30
+    needs: build-rock
+    strategy:
+      matrix:
+        system:
+          - os: ubuntu-22.04
+            arch: amd64
+          - os: ubuntu-22.04-arm
+            arch: arm64
+        env: [integration]
+        k8s_version:
+          - 1.32-classic/stable
+          - 1.34-classic/stable
+      fail-fast: false
+    steps:
+      - name: Disk cleanup
+        shell: bash
+        run: |
+          sudo rm -rf \
+            /opt/google \
+            /opt/hostedtoolcache \
+            /opt/microsoft/powershell \
+            /opt/microsoft/msedge \
+            "$AGENT_TOOLSDIRECTORY" \
+            /usr/lib/firefox \
+            /usr/lib/mono \
+            /usr/local/julia* \
+            /usr/local/lib/android \
+            /usr/local/share/chromium \
+            /usr/local/share/powershell \
+            /usr/share/dotnet \
+            /usr/share/gradle* \
+            /usr/share/miniconda \
+            /usr/share/sbt \
+            /usr/share/swift \
+            /home/linuxbrew
+          pipx uninstall-all
+          printf '\nDisk usage\n'
+          df --human-readable
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install tooling
+        run: |
+          sudo snap install concierge --classic
+          sudo snap install yq
+          cat tests/resources/concierge_ci.yaml | yq '.providers.k8s.channel = "${{ matrix.k8s_version }}"' > edited_concierge.yaml
+          sudo concierge prepare -c edited_concierge.yaml
+          mkdir -p /home/ubuntu/.kube
+          sudo chown -f -R ubuntu /home/ubuntu/.kube
+          sudo k8s config | tee /home/ubuntu/.kube/config
+
+
+      - name: Setup microceph
+        id: microceph
+        run: |
+          sudo microceph cluster bootstrap
+          sudo microceph disk add loop,1G,3
+          sudo microceph enable rgw
+          sudo microceph.radosgw-admin user create --uid test --display-name test --access-key=foo --secret-key=bar
+          export IP=$(ip -4 -j route get 2.2.2.2 | jq -r '.[] | .prefsrc')
+          echo -e "S3_SERVER_URL=http://$IP:80/\nS3_ACCESS_KEY=foo\nS3_SECRET_KEY=bar" > .env
+
+      - name: Download artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: charmed-flink-${{ matrix.system.arch }}
+          path: charmed-flink
+
+      - name: Load test image
+        run: |
+          sudo mkdir /var/snap/k8s/common/images
+          sudo cp charmed-flink/*.tar /var/snap/k8s/common/images/
+          sudo snap restart k8s.containerd
+          sleep 30
+          if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep test-charmed-flink)" ]; then
+            sleep 30
+            if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep test-charmed-flink)" ]; then
+              echo "Test image not loaded"
+              exit 1
+            fi
+          fi
+
+      - name: Run tests
+        run: |
+          just test-rock
+

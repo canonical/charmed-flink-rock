@@ -1,0 +1,31 @@
+# Copyright 2026  Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: CI pipeline
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Install tox
+        run: python3 -m pip install tox
+      - name: YAML Lint
+        run: tox -e lint
+
+  integration:
+    needs: [lint]
+    uses: ./.github/workflows/integration.yaml
+    secrets: inherit

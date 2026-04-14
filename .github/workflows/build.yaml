@@ -1,29 +1,15 @@
+# Copyright 2026  Canonical Ltd.
+# See LICENSE file for licensing details.
+
 name: Build ROCK
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
-  workflow_dispatch:
-  pull_request:
   workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  lint:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-      - name: Install tox
-        run: python3 -m pip install tox
-      - name: YAML Lint
-        run: tox -e lint
-
   build:
     strategy:
       matrix:
@@ -34,8 +20,6 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.system.os }}
     timeout-minutes: 60
-    needs:
-      - lint
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -57,21 +41,23 @@ jobs:
           rockcraft pack --verbose
 
           VERSION=$(yq '.version' rockcraft.yaml)
-          echo "rock=charmed-flink_${VERSION}_${{ matrix.system.arch }}.rock" >> $GITHUB_OUTPUT
+          echo "rock=charmed-flink_${VERSION}_${{ matrix.system.arch }}.tar" >> $GITHUB_OUTPUT
 
       - name: Add additional labels
         run: |
           COMMIT_ID=$(git log -1 --format=%H)
           DESCRIPTION=$(yq .description rockcraft.yaml)
           FILE=${{ steps.build.outputs.rock }}
+          VERSION=$(yq '.version' rockcraft.yaml)
 
-          rockcraft.skopeo copy "oci-archive:${FILE}" oci:to_process:latest
+          rockcraft.skopeo copy "oci-archive:${FILE%'tar'}rock" oci:to_process:latest
           regctl image mod ocidir://to_process:latest --replace \
             --label "org.opencontainers.image.revision=${COMMIT_ID}" \
             --label "org.opencontainers.image.source=${{ github.repositoryUrl }}" \
             --label "org.opencontainers.image.description=${DESCRIPTION}"
-          regctl image export ocidir://to_process:latest "${FILE}"
-          rm -r to_process
+          regctl image export ocidir://to_process:latest \
+            --name "ghcr.io/canonical/test-charmed-flink:${VERSION}" \
+            "${FILE}"
 
       - name: Upload locally built ROCK artifact
         uses: actions/upload-artifact@v7
