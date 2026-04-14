@@ -25,7 +25,17 @@ jobs:
       - name: YAML Lint
         run: tox -e lint
 
-  integration:
+  build-rock:
     needs: [lint]
+    uses: ./.github/workflows/build.yaml
+
+  integration:
+    needs: [build-rock]
     uses: ./.github/workflows/integration.yaml
-    secrets: inherit
+
+  trivy:
+    needs: [build-rock]
+    uses: ./.github/workflows/trivy.yaml
+    permissions:
+      contents: read
+      security-events: write

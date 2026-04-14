@@ -1,0 +1,54 @@
+# Copyright 2026  Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: Trivy scan
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Trivy scan
+    permissions:
+      security-events: write # Required for uploading Trivy SARIF results
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install rockcraft (for skopeo)
+        run: |
+          sudo snap install rockcraft --classic
+
+      - name: Download artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: charmed-flink-${{ matrix.arch }}
+          path: charmed-flink
+
+      - name: Import locally
+        run: |
+          rockcraft.skopeo --insecure-policy copy \
+            docker-archive:$(find charmed-flink -type f -name "*.tar") \
+            docker-daemon:trivy/charmed-flink-${{ matrix.arch }}:latest
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: "trivy/charmed-flink-${{ matrix.arch }}:latest"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "MEDIUM,HIGH,CRITICAL"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: ${{ matrix.arch }}
