@@ -22,8 +22,8 @@ jobs:
             arch: arm64
         env: [integration]
         k8s_version:
-          - 1.32-classic/stable
-          - 1.34-classic/stable
+          - 1.32-strict/stable
+          - 1.34-strict/stable
       fail-fast: false
     steps:
       - name: Disk cleanup
@@ -58,10 +58,10 @@ jobs:
         run: |
           sudo snap install concierge --classic
           sudo snap install yq
-          cat tests/resources/concierge_ci.yaml | yq '.providers.k8s.channel = "${{ matrix.k8s_version }}"' > edited_concierge.yaml
+          cat tests/resources/concierge_ci.yaml | yq '.providers.microk8s.channel = "${{ matrix.k8s_version }}"' > edited_concierge.yaml
           sudo concierge prepare -c edited_concierge.yaml
 
-          sudo k8s config | tee /home/runner/.kube/config
+          sudo microk8s config | tee /home/runner/.kube/config
 
       - name: Setup microceph
         id: microceph
@@ -90,17 +90,8 @@ jobs:
 
       - name: Load test image
         run: |
-          sudo mkdir /var/snap/k8s/common/images
-          sudo cp charmed-flink/*.tar /var/snap/k8s/common/images/
-          sudo snap restart k8s.containerd
-          sleep 30
-          if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep test-charmed-flink)" ]; then
-            sleep 30
-            if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep test-charmed-flink)" ]; then
-              echo "Test image not loaded"
-              exit 1
-            fi
-          fi
+          sudo mv charmed-flink/*.tar .
+          sudo microk8s ctr images import $(find . -type f -name "*.tar")
 
       - name: Run tests
         run: |

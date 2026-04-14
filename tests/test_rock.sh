@@ -35,8 +35,8 @@ test_example_job() {
         -Dkubernetes.container.image.ref="$(flink_image)" \
         -Dkubernetes.namespace="$NAMESPACE" \
         -Dkubernetes.service-account="$SERVICE_ACCOUNT" \
-        -Dkubernetes.jobmanager.cpu=2 \
-        -Dkubernetes.taskmanager.cpu=2 \
+        -Dkubernetes.jobmanager.cpu=0.5 \
+        -Dkubernetes.taskmanager.cpu=0.5 \
         local:///opt/flink/examples/streaming/WordCount.jar
 
     kubectl wait --for=condition=Available --timeout=30s deploy/${CLUSTER_ID} -n ${NAMESPACE} || exit 1
@@ -106,7 +106,7 @@ spec:
 EOF
     kubectl wait --for=condition=Available --timeout=60s deploy/flink-history-server -n ${NAMESPACE} || exit 1
     kubectl rollout status --timeout=60s deploy/flink-history-server -n ${NAMESPACE}
-    sleep 5
+    sleep 15
 
     curl "$(get_hs_service_endpoint)"/jobs/overview
 }
@@ -123,8 +123,8 @@ test_example_job_archived_s3() {
         -Dkubernetes.container.image.ref="$(flink_image)" \
         -Dkubernetes.namespace="$NAMESPACE" \
         -Dkubernetes.service-account="$SERVICE_ACCOUNT" \
-        -Dkubernetes.jobmanager.cpu=2 \
-        -Dkubernetes.taskmanager.cpu=2 \
+        -Dkubernetes.jobmanager.cpu=0.5 \
+        -Dkubernetes.taskmanager.cpu=0.5 \
         -Dcontainerized.master.env.ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-2.2.0.jar \
         -Dcontainerized.taskmanager.env.ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-2.2.0.jar \
         -Djobmanager.archive.fs.dir=s3://test-flink/flink-events/ \
