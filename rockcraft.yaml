@@ -46,7 +46,7 @@ parts:
     build-snaps:
       - yq
     override-build: |
-      mkdir -p $CRAFT_PART_INSTALL/opt/flink
+      mkdir -p $CRAFT_PART_INSTALL/opt/flink/logs
 
       # Replace default endpoints bind address to use the container's network address
       # Taken from upstream
@@ -98,7 +98,5 @@ parts:
       chown -R ${FLINK_UID}:${FLINK_GID} docker-entrypoint.sh
       chmod -R 750 docker-entrypoint.sh
 
-      install -d -o ${FLINK_UID} -g ${FLINK_GID} -m 770 \
-        etc/flink \
-        var/lib/flink \
-        var/log/flink
+      # See if we need to symlink the conf folder here
+      install -d -o ${FLINK_UID} -g ${FLINK_GID} -m 770 etc/flink
