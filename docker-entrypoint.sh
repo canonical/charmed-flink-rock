@@ -31,24 +31,24 @@ check_priv_user() {
 }
 
 copy_plugins_if_required() {
-  if [ -z "$ENABLE_BUILT_IN_PLUGINS" ]; then
-    return 0
-  fi
-
-  echo "Enabling required built-in plugins"
-  for target_plugin in $(echo "$ENABLE_BUILT_IN_PLUGINS" | tr ';' ' '); do
-    echo "Linking ${target_plugin} to plugin directory"
-    plugin_name=${target_plugin%.jar}
-
-    mkdir -p "${FLINK_HOME}/plugins/${plugin_name}"
-    if [ ! -e "${FLINK_HOME}/opt/${target_plugin}" ]; then
-      echo "Plugin ${target_plugin} does not exist. Exiting."
-      exit 1
-    else
-      ln -fs "${FLINK_HOME}/opt/${target_plugin}" "${FLINK_HOME}/plugins/${plugin_name}"
-      echo "Successfully enabled ${target_plugin}"
+    if [ -z "$ENABLE_BUILT_IN_PLUGINS" ]; then
+        return 0
     fi
-  done
+
+    echo "Enabling required built-in plugins"
+    for target_plugin in $(echo "$ENABLE_BUILT_IN_PLUGINS" | tr ';' ' '); do
+        echo "Linking ${target_plugin} to plugin directory"
+        plugin_name=${target_plugin%.jar}
+
+        mkdir -p "${FLINK_HOME}/plugins/${plugin_name}"
+        if [ ! -e "${FLINK_HOME}/opt/${target_plugin}" ]; then
+            echo "Plugin ${target_plugin} does not exist. Exiting."
+            exit 1
+        else
+            ln -fs "${FLINK_HOME}/opt/${target_plugin}" "${FLINK_HOME}/plugins/${plugin_name}"
+            echo "Successfully enabled ${target_plugin}"
+        fi
+    done
 }
 
 set_config_options() {
@@ -106,7 +106,7 @@ process_flink_properties() {
             continue
         fi
 
-        IFS=':' read -r key value <<< "$prop"
+        IFS=':' read -r key value <<<"$prop"
 
         value=$(echo $value | envsubst)
 

@@ -21,10 +21,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
       - name: Install tox
-        run: python3 -m pip install tox
-      - name: YAML Lint
-        run: tox -e lint
+        run: sudo apt install just shfmt yamllint
+
+      - name: Lint
+        run: just lint
 
   build-rock:
     name: Build Rock (amd64 and arm64)

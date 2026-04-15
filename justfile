@@ -4,6 +4,11 @@
 # Load S3 creds and endpoint
 set dotenv-load
 
+# Lint and format files
+lint:
+    yamllint --no-warnings rockcraft.yaml
+    shfmt -l -w -i 4 tests docker-entrypoint.sh
+    
 # Pack the rock
 pack:
     rockcraft pack
