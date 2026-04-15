@@ -20,6 +20,10 @@ jobs:
   trivy:
     needs: build
     uses: ./.github/workflows/trivy.yml
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
 
   publish:
     needs: [build, trivy]
@@ -34,9 +38,6 @@ jobs:
 
       - name: Install tooling
         run: |
-          sudo snap install rockcraft --channel latest/edge --classic
-          sudo snap alias rockcraft.skopeo skopeo
-          sudo snap install yq
           pipx install git+https://github.com/canonical/data-platform-workflows#subdirectory=_cli
 
       - name: Login to GitHub Container Registry
