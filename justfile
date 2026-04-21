@@ -20,4 +20,4 @@ clean:
 
 # Test Rock
 test-rock:
-    /bin/bash tests/test_rock.sh
+    /usr/bin/env bash tests/test_rock.sh
