@@ -68,6 +68,15 @@ parts:
     stage:
       - opt/flink
 
+  entrypoint:
+    plugin: dump
+    source-type: git
+    source: https://github.com/apache/flink-docker
+    source-depth: 1
+    source-subdir: 2.2/scala_2.12-java17-ubuntu
+    stage:
+      - docker-entrypoint.sh
+
   charmed-flink:
     plugin: dump
     after: [flink]
@@ -79,7 +88,6 @@ parts:
     organize:
       licenses/*: opt/flink/licenses/
     stage:
-      - docker-entrypoint.sh
       - opt/flink/
       - usr/bin/envsubst
       - usr/lib/*

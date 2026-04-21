@@ -7,7 +7,7 @@ set dotenv-load
 # Lint and format files
 lint:
     yamllint --no-warnings rockcraft.yaml
-    shfmt -l -w -i 4 tests docker-entrypoint.sh
+    shfmt -l -w -i 4 tests
     
 # Pack the rock
 pack:
