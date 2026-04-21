@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-history-server
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink-history-server
+  template:
+    metadata:
+      labels:
+        app: flink-history-server
+    spec:
+      serviceAccountName: ${SERVICE_ACCOUNT}
+      containers:
+        - name: history-server
+          image: ${IMAGE}
+          args: ["history-server"] 
+          env:
+            - name: ENABLE_BUILT_IN_PLUGINS
+              value: "flink-s3-fs-presto-2.2.0.jar"
+            - name: FLINK_PROPERTIES
+              value: |
+                historyserver.archive.fs.dir: s3://test-flink/flink-events/
+                historyserver.archive.fs.refresh-interval: 5000
+                historyserver.web.port: 8082
+                s3.access-key: $S3_ACCESS_KEY
+                s3.secret-key: $S3_SECRET_KEY
+                s3.endpoint: $S3_ENDPOINT
+
+          ports:
+            - containerPort: 8082
+              name: webui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-history-server
+  namespace: ${NAMESPACE}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8082
+      targetPort: 8082
+  selector:
+    app: flink-history-server

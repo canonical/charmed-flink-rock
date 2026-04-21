@@ -16,41 +16,13 @@ setup_namespace_and_sa() {
     # $1: Namespace to run the tests
     # $2: Service account name to run the tests
 
-    namespace=$1
-    sa=$2
-    echo "Setting up Namespace and Service account"
-    kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f -
+    export NAMESPACE=$1
+    export SERVICE_ACCOUNT=$2
 
-    cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: $sa
-  namespace: $namespace
----
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  namespace: $namespace
-  name: flink-k8s-role
-rules:
-  - apiGroups: ["", "apps"]
-    resources: ["pods", "services", "configmaps", "deployments"]
-    verbs: ["get", "list", "watch", "create", "delete", "edit", "patch"]
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: flink-k8s-role-binding
-  namespace: $namespace
-subjects:
-- kind: ServiceAccount
-  name: $sa
-roleRef:
-  kind: Role
-  name: flink-k8s-role
-  apiGroup: rbac.authorization.k8s.io
-EOF
+    echo "Setting up Namespace and Service account"
+    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+    envsubst <tests/resources/rbac-setup.yaml.tmpl | kubectl apply -f -
 }
 
 wait_for_pod_by_label() {

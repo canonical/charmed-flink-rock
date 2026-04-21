@@ -11,11 +11,12 @@ if [[ -z "$S3_ACCESS_KEY" || -z "$S3_SECRET_KEY" || -z "$S3_ENDPOINT" ]]; then
     exit 1
 fi
 
-NAMESPACE="test-flink-ns"
-SERVICE_ACCOUNT="testflink"
-JUMP_POD_NAME="flink-jump-host"
-HS_SVC_NAME="flink-history-server"
-CLUSTER_ID="wordcount-cluster"
+export NAMESPACE="test-flink-ns"
+export SERVICE_ACCOUNT="testflink"
+export JUMP_POD_NAME="flink-jump-host"
+export HS_SVC_NAME="flink-history-server"
+export CLUSTER_ID="wordcount-cluster"
+export IMAGE=$(flink_image)
 
 get_hs_service_endpoint() {
     # Construct the endpoint to access the history server
@@ -53,57 +54,8 @@ test_example_job() {
 test_deploy_history_server() {
     # Deploy the History Server, make sure it properly runs
     echo "Creating History Server deployment and service."
-    cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: flink-history-server
-  namespace: $NAMESPACE
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: flink-history-server
-  template:
-    metadata:
-      labels:
-        app: flink-history-server
-    spec:
-      serviceAccountName: $SERVICE_ACCOUNT
-      containers:
-        - name: history-server
-          image: $(flink_image)
-          args: ["history-server"] 
-          env:
-            - name: ENABLE_BUILT_IN_PLUGINS
-              value: "flink-s3-fs-presto-2.2.0.jar"
-            - name: FLINK_PROPERTIES
-              value: |
-                historyserver.archive.fs.dir: s3://test-flink/flink-events/
-                historyserver.archive.fs.refresh-interval: 5000
-                historyserver.web.port: 8082
-                s3.access-key: $S3_ACCESS_KEY
-                s3.secret-key: $S3_SECRET_KEY
-                s3.endpoint: $S3_ENDPOINT
+    envsubst <tests/resources/history-server.yaml.templ | kubectl apply -f -
 
-          ports:
-            - containerPort: 8082
-              name: webui
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: flink-history-server
-  namespace: $NAMESPACE
-spec:
-  type: ClusterIP
-  ports:
-    - port: 8082
-      targetPort: 8082
-  selector:
-    app: flink-history-server
-
-EOF
     kubectl wait --for=condition=Available --timeout=60s deploy/flink-history-server -n ${NAMESPACE} || exit 1
     kubectl rollout status --timeout=60s deploy/flink-history-server -n ${NAMESPACE}
     sleep 15

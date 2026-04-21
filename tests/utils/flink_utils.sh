@@ -22,26 +22,14 @@ launch_jump_host() {
     # $2: Service account
     # $3: Pod name
 
-    namespace=$1
-    sa=$2
-    pod_name=$3
+    export NAMESPACE=$1
+    export SERVICE_ACCOUNT=$2
+    export POD_NAME=$3
+    export IMAGE=$(flink_image)
 
     echo "Creating jump host pod"
-    cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: $pod_name
-  namespace: $namespace
-spec:
-  serviceAccountName: $sa
-  containers:
-  - name: flink-cli
-    image: $(flink_image)
-    imagePullPolicy: IfNotPresent
-    command: ["sleep", "infinity"]
-EOF
+    envsubst <tests/resources/jump-host.yaml.templ | kubectl apply -f -
 
     echo "Waiting for jump host to be ready..."
-    kubectl wait --for=condition=Ready pod/$pod_name -n $namespace --timeout=60s
+    kubectl wait --for=condition=Ready pod/$POD_NAME -n $NAMESPACE --timeout=60s
 }
