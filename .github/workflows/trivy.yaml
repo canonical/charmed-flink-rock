@@ -29,7 +29,7 @@ jobs:
           sudo snap install rockcraft --classic
 
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: charmed-flink-${{ matrix.arch }}
           path: charmed-flink

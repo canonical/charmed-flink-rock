@@ -83,7 +83,7 @@ jobs:
           aws s3 cp .keep s3://test-flink/flink-events/.keep
 
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: charmed-flink-${{ matrix.system.arch }}
           path: charmed-flink
