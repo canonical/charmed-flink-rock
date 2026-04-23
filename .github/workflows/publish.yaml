@@ -19,7 +19,7 @@ jobs:
 
   trivy:
     needs: build
-    uses: ./.github/workflows/trivy.yml
+    uses: ./.github/workflows/trivy.yaml
     permissions:
       actions: read
       contents: read
