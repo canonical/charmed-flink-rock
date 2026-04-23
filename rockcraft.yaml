@@ -1,0 +1,110 @@
+# Copyright 2026 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: charmed-flink
+base: ubuntu@24.04
+version: "2.2.0"
+summary: Charmed Apache Flink ROCK OCI
+description: |
+  This is an OCI image that bundles Apache Flink together with other tools
+  of its ecosystem in order to be used in Charmed Operators, providing
+  automated operations management from day 0 to day 2 on the Apache Flink
+  stream processing framework, on top of a K8s cluster. It is an open source,
+  end-to-end, production ready data platform on top of cloud native
+  technologies.
+license: Apache-2.0
+
+platforms:
+  amd64:
+  arm64:
+
+run_user: _daemon_
+entrypoint-service: flinkd
+
+environment:
+  FLINK_HOME: /opt/flink
+  FLINK_CONF_DIR: /opt/flink/conf
+  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-${CRAFT_ARCH_BUILD_FOR}
+  PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/flink/bin
+
+services:
+  flinkd:
+    command: "/bin/bash /docker-entrypoint.sh [ sleep ]"
+    summary: "Service to startup Flink processes using the Flink entrypoint."
+    override: replace
+    startup: enabled
+    on-success: shutdown
+    on-failure: shutdown
+
+parts:
+  flink:
+    plugin: nil
+    source: https://dlcdn.apache.org/flink/flink-2.2.0/flink-2.2.0-bin-scala_2.12.tgz
+    source-checksum: sha512/3e6a7d259af85ffaa45aaf1726898d2b1349642ae40cb946f091b2eca3eed165f9f8268b5d10c6f279e9681ceb8cea6ac95bd9b4304946d8877d4f214fff5020
+    overlay-packages:
+      - openjdk-17-jre-headless
+    build-snaps:
+      - yq
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/opt/flink/logs
+
+      # Replace default endpoints bind address to use the container's network address
+      # Taken from upstream
+      yq -i '
+        .rest.address = "0.0.0.0" |
+        .rest.bind-address = "0.0.0.0" |
+        .jobmanager.bind-host = "0.0.0.0" |
+        .taskmanager.bind-host = "0.0.0.0" |
+        del(.taskmanager.host)
+      ' conf/config.yaml
+
+      cp -r bin $CRAFT_PART_INSTALL/opt/flink/
+      cp -r conf $CRAFT_PART_INSTALL/opt/flink/
+      cp -r examples $CRAFT_PART_INSTALL/opt/flink/
+      cp -r lib $CRAFT_PART_INSTALL/opt/flink/
+      cp -r licenses $CRAFT_PART_INSTALL/opt/flink/
+      cp -r opt $CRAFT_PART_INSTALL/opt/flink/
+      cp -r plugins $CRAFT_PART_INSTALL/opt/flink/
+    stage:
+      - opt/flink
+
+  entrypoint:
+    plugin: dump
+    source-type: git
+    source: https://github.com/apache/flink-docker
+    source-depth: 1
+    source-subdir: 2.2/scala_2.12-java17-ubuntu
+    stage:
+      - docker-entrypoint.sh
+
+  charmed-flink:
+    plugin: dump
+    after: [flink]
+    source: .
+    stage-packages:
+      # Needed by the entrypoint script for envsubst
+      - gettext-base
+      - libjemalloc-dev
+    organize:
+      licenses/*: opt/flink/licenses/
+    stage:
+      - opt/flink/
+      - usr/bin/envsubst
+      - usr/lib/*
+
+  non-root-user:
+    plugin: nil
+    after: [flink, charmed-flink]
+    override-prime: |
+      FLINK_GID=584792
+      FLINK_UID=584792
+
+      craftctl default
+      chown -R ${FLINK_UID}:${FLINK_GID} opt/flink
+      chmod -R 750 opt/flink
+
+      chown -R ${FLINK_UID}:${FLINK_GID} docker-entrypoint.sh
+      chmod -R 750 docker-entrypoint.sh
+
+      # See if we need to symlink the conf folder here
+      install -d -o ${FLINK_UID} -g ${FLINK_GID} -m 770 etc/flink

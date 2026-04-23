@@ -1,0 +1,67 @@
+name: Publish ROCK
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "2.2/edge"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yaml
+
+  trivy:
+    needs: build
+    uses: ./.github/workflows/trivy.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+  publish:
+    needs: [build, trivy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install tooling
+        run: |
+          pipx install git+https://github.com/canonical/data-platform-workflows#subdirectory=_cli
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: unused
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: charmed-flink-amd64
+          path: to_publish
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: charmed-flink-arm64
+          path: to_publish
+
+      - name: Publish to GHCR
+        run: |
+          cp rockcraft.yaml to_publish/
+          release-rock --directory=to_publish/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

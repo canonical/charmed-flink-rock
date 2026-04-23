@@ -1,0 +1,66 @@
+# Copyright 2026  Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: Build ROCK
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        system:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.system.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup LXD
+        uses: canonical/setup-lxd@main
+        with:
+          channel: 5.21/stable
+
+      - name: Install dependencies
+        run: |
+          sudo snap install yq
+          sudo snap install rockcraft --classic --edge
+          sudo snap install regclient
+
+      - name: Build ROCK
+        id: build
+        run: |
+          rockcraft pack --verbose
+
+          VERSION=$(yq '.version' rockcraft.yaml)
+          echo "rock=charmed-flink_${VERSION}_${{ matrix.system.arch }}.tar" >> $GITHUB_OUTPUT
+
+      - name: Add additional labels
+        run: |
+          COMMIT_ID=$(git log -1 --format=%H)
+          DESCRIPTION=$(yq .description rockcraft.yaml)
+          FILE=${{ steps.build.outputs.rock }}
+          VERSION=$(yq '.version' rockcraft.yaml)
+
+          rockcraft.skopeo copy "oci-archive:${FILE%'tar'}rock" oci:to_process:latest
+          regctl image mod ocidir://to_process:latest --replace \
+            --label "org.opencontainers.image.revision=${COMMIT_ID}" \
+            --label "org.opencontainers.image.source=${{ github.repositoryUrl }}" \
+            --label "org.opencontainers.image.description=${DESCRIPTION}"
+          regctl image export ocidir://to_process:latest \
+            --name "ghcr.io/canonical/test-charmed-flink:${VERSION}" \
+            "${FILE}"
+
+      - name: Upload locally built ROCK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: charmed-flink-${{ matrix.system.arch }}
+          path: ${{ steps.build.outputs.rock }}
