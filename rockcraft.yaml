@@ -39,8 +39,8 @@ services:
 parts:
   flink:
     plugin: nil
-    source: https://dlcdn.apache.org/flink/flink-2.2.0/flink-2.2.0-bin-scala_2.12.tgz
-    source-checksum: sha512/3e6a7d259af85ffaa45aaf1726898d2b1349642ae40cb946f091b2eca3eed165f9f8268b5d10c6f279e9681ceb8cea6ac95bd9b4304946d8877d4f214fff5020
+    source: https://github.com/canonical/central-uploader/releases/download/flink-2.2.0-ubuntu0/flink-2.2.0-ubuntu0-20260617074502.tgz
+    source-checksum: sha512/6e0feb924f9fe4fc1c33fd06ac44f92749cb97554ac6a4effc8fcd427537fa75d2702c74e2a1cdc2a8e95b9d50841014b62d99f9f85be50dcf68550b994c5bd2
     overlay-packages:
       - openjdk-17-jre-headless
     build-snaps:
