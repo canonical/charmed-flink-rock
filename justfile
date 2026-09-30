@@ -16,7 +16,7 @@ tar_file := rock_name + "_" + rock_version + "_" + arch + ".tar"
 
 # Lint and format files
 lint:
-    yamllint --no-warnings rockcraft.yaml tests/**/*.yaml
+    yamllint --no-warnings rockcraft.yaml spread.yaml tests/**/*.yaml tests/**/*.yaml.templ tests/**/*.yaml.tmpl
     shfmt -l -w -i 4 tests
 
 # Pack the rock
@@ -67,6 +67,10 @@ get-tar-file:
 get-oci:
     @echo "{{oci_name}}"
 
-# Test Rock
-test-rock:
-    /usr/bin/env bash tests/test_rock.sh
+# Test Rock - basic tests
+test-basic:
+    /usr/bin/env bash tests/test_basic/test.sh
+
+# Test Rock - history server tests
+test-history-server:
+    /usr/bin/env bash tests/test_history_server/test.sh

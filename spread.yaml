@@ -1,0 +1,99 @@
+# Copyright 2026 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+project: charmed-flink-rock
+
+backends:
+  lxd-vm:
+    type: adhoc
+    allocate: |
+      hash=$(python3 -c "import hashlib; print(hashlib.sha256('$SPREAD_PASSWORD'.encode()).hexdigest()[:6])")
+      VM_NAME="${VM_NAME:-${SPREAD_SYSTEM//./-}-${hash}}"
+      DISK="${DISK:-20}"
+      CPU="${CPU:-4}"
+      MEM="${MEM:-8}"
+
+      cloud_config="#cloud-config
+      ssh_pwauth: true
+      users:
+        - default
+        - name: runner
+          plain_text_passwd: $SPREAD_PASSWORD
+          lock_passwd: false
+          sudo: ALL=(ALL) NOPASSWD:ALL
+      "
+
+      lxc launch --vm \
+        "${SPREAD_SYSTEM//-/:}" \
+        "${VM_NAME}" \
+        -c user.user-data="${cloud_config}" \
+        -c limits.cpu="${CPU}" \
+        -c limits.memory="${MEM}GiB" \
+        -d root,size="${DISK}GiB"
+
+      while ! lxc exec "${VM_NAME}" -- id -u runner &>/dev/null; do sleep 0.5; done
+
+      ADDRESS "$(lxc ls -f csv | grep "${VM_NAME}" | cut -d"," -f3 | cut -d" " -f1)"
+    discard: |
+      hash=$(python3 -c "import hashlib; print(hashlib.sha256('$SPREAD_PASSWORD'.encode()).hexdigest()[:6])")
+      VM_NAME="${VM_NAME:-${SPREAD_SYSTEM//./-}-${hash}}"
+      lxc delete --force "${VM_NAME}"
+    systems:
+      - ubuntu-24.04:
+          username: runner
+    prepare: |
+      systemctl disable --now unattended-upgrades.service
+      systemctl mask unattended-upgrades.service
+
+  github-ci:
+    type: adhoc
+    manual: true
+    allocate: |
+      sudo tee /etc/ssh/sshd_config.d/10-spread-github-ci.conf << 'EOF'
+      PasswordAuthentication yes
+      PermitEmptyPasswords yes
+      EOF
+
+      sudo systemctl daemon-reload
+      sudo systemctl restart ssh
+
+      sudo passwd --delete "$USER"
+
+      ADDRESS "127.0.0.1"
+    environment:
+      CI: "$(HOST: echo $CI)"
+    systems:
+      - ubuntu-24.04:
+          username: runner
+      - ubuntu-24.04-arm:
+          username: runner
+
+suites:
+  tests/spread/:
+    summary: Integration tests for charmed-flink-rock
+
+path: /root/spread_project
+
+kill-timeout: 3h
+
+prepare: |
+  sleep 5
+  snap refresh --hold
+  chown -R root:root "$SPREAD_PATH"
+  cd "$SPREAD_PATH"
+  snap install --classic concierge
+  concierge prepare --trace -c tests/resources/concierge_ci.yaml
+
+  mkdir -p /var/snap/k8s/common/images
+  cp "$(just get-tar-file)" /var/snap/k8s/common/images/
+  sudo snap restart k8s.containerd
+
+  OCI_IMAGE=$(just get-oci)
+  sleep 30
+  if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep -F "$OCI_IMAGE")" ]; then
+    sleep 30
+    if [ -z "$(sudo /snap/k8s/current/bin/ctr --address /run/containerd/containerd.sock --namespace k8s.io images list -q | grep -F "$OCI_IMAGE")" ]; then
+      echo "Test image not loaded"
+      exit 1
+    fi
+  fi
