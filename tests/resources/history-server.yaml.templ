@@ -17,7 +17,7 @@ spec:
       containers:
         - name: history-server
           image: ${IMAGE}
-          args: ["history-server"] 
+          args: ["history-server"]
           env:
             - name: ENABLE_BUILT_IN_PLUGINS
               value: "flink-s3-fs-presto-2.2.0.jar"
