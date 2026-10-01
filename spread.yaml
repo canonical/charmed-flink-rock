@@ -84,6 +84,12 @@ prepare: |
   snap install --classic concierge
   concierge prepare --trace -c tests/resources/concierge_ci.yaml
 
+  # This avoids a CI issue where coredns starts before cilium fully settles
+  sudo k8s x-wait-for network --timeout 10m
+  sudo k8s x-wait-for dns --timeout 10m
+  sudo k8s kubectl rollout restart deployment/coredns -n kube-system
+  sudo k8s kubectl rollout status deployment/coredns -n kube-system --timeout=10m
+
   mkdir -p /var/snap/k8s/common/images
   cp "$(just get-tar-file)" /var/snap/k8s/common/images/
   sudo snap restart k8s.containerd
