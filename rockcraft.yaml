@@ -13,6 +13,8 @@ description: |
   end-to-end, production ready data platform on top of cloud native
   technologies.
 license: Apache-2.0
+source-code: https://github.com/canonical/charmed-flink-rock
+issues: https://github.com/canonical/charmed-flink-rock/issues/new/choose
 
 platforms:
   amd64:

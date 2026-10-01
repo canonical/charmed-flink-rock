@@ -20,8 +20,8 @@ metadata:
   name: flink-k8s-role-binding
   namespace: ${NAMESPACE}
 subjects:
-- kind: ServiceAccount
-  name: ${SERVICE_ACCOUNT}
+  - kind: ServiceAccount
+    name: ${SERVICE_ACCOUNT}
 roleRef:
   kind: Role
   name: flink-k8s-role
