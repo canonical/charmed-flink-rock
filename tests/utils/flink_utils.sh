@@ -9,9 +9,9 @@ get_flink_version() {
 }
 
 flink_image() {
-    # Construct the image ref from Rock version
+    # Use the exact OCI reference embedded during refine and loaded by CI/spread.
 
-    echo "ghcr.io/canonical/test-charmed-flink:$(get_flink_version)"
+    just get-oci
 }
 
 launch_jump_host() {

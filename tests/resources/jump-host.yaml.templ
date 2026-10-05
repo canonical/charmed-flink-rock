@@ -6,7 +6,7 @@ metadata:
 spec:
   serviceAccountName: ${SERVICE_ACCOUNT}
   containers:
-  - name: flink-cli
-    image: ${IMAGE}
-    imagePullPolicy: IfNotPresent
-    command: ["sleep", "infinity"]
+    - name: flink-cli
+      image: ${IMAGE}
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]

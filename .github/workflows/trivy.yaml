@@ -5,52 +5,70 @@ name: Trivy scan
 
 on:
   workflow_call:
-
-permissions:
-  contents: read
+    inputs:
+      submit_dependency_graph:
+        description: "Submit SBOM to GitHub Dependency Graph"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   scan:
     name: Trivy scan
-    permissions:
-      contents: read
-      security-events: write # Required for uploading Trivy SARIF results
-      actions: read
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         arch: [amd64, arm64]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install rockcraft (for skopeo)
         run: |
           sudo snap install rockcraft --classic
 
       - name: Download artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: charmed-flink-${{ matrix.arch }}
           path: charmed-flink
 
-      - name: Import locally
+      - name: Cache Trivy DB
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-trivy-
+
+      - name: Import image locally
         run: |
           rockcraft.skopeo --insecure-policy copy \
             docker-archive:$(find charmed-flink -type f -name "*.tar") \
-            docker-daemon:trivy/charmed-flink-${{ matrix.arch }}:latest
+            docker-daemon:trivy/charmed-flink-${{ matrix.arch }}:${{ github.sha }}
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          image-ref: "trivy/charmed-flink-${{ matrix.arch }}:latest"
+          image-ref: "trivy/charmed-flink-${{ matrix.arch }}:${{ github.sha }}"
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "MEDIUM,HIGH,CRITICAL"
+          trivyignores: .trivyignore
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
           category: ${{ matrix.arch }}
+
+      - name: Run Trivy in GitHub SBOM mode and submit results to Dependency Graph
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        if: ${{ inputs.submit_dependency_graph }}
+        with:
+          scan-type: "image"
+          format: "github"
+          output: "dependency-results-${{ matrix.arch }}.sbom.json"
+          image-ref: "trivy/charmed-flink-${{ matrix.arch }}:${{ github.sha }}"
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
