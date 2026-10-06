@@ -3,7 +3,7 @@
 
 name: charmed-flink
 base: ubuntu@24.04
-version: "2.2.0"
+version: "2.3.0"
 summary: Charmed Apache Flink ROCK OCI
 description: |
   This is an OCI image that bundles Apache Flink together with other tools
@@ -41,8 +41,8 @@ services:
 parts:
   flink:
     plugin: nil
-    source: https://github.com/canonical/central-uploader/releases/download/flink-2.2.0-ubuntu0/flink-2.2.0-ubuntu0-20260617074502.tgz
-    source-checksum: sha512/6e0feb924f9fe4fc1c33fd06ac44f92749cb97554ac6a4effc8fcd427537fa75d2702c74e2a1cdc2a8e95b9d50841014b62d99f9f85be50dcf68550b994c5bd2
+    source: https://github.com/canonical/central-uploader/releases/download/flink-2.3.0-ubuntu0/flink-2.3.0-ubuntu0-20261005140037.tgz
+    source-checksum: sha512/a71d64ae71af9130e1b4a8d87a7d266467e7a136f86224535af0236c92fb9d679f0317f303af433d7a8c26a70d6018c07fcc0f8d4b14a08a331bab089a1f40f5
     overlay-packages:
       - openjdk-17-jre-headless
     build-snaps:
@@ -75,7 +75,7 @@ parts:
     source-type: git
     source: https://github.com/apache/flink-docker
     source-depth: 1
-    source-subdir: 2.2/scala_2.12-java17-ubuntu
+    source-subdir: 2.3/scala_2.12-java17-ubuntu
     stage:
       - docker-entrypoint.sh
 

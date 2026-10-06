@@ -47,8 +47,8 @@ run_archived_job() {
         -Dkubernetes.service-account="$SERVICE_ACCOUNT" \
         -Dkubernetes.jobmanager.cpu=0.5 \
         -Dkubernetes.taskmanager.cpu=0.5 \
-        -Dcontainerized.master.env.ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-2.2.0.jar \
-        -Dcontainerized.taskmanager.env.ENABLE_BUILT_IN_PLUGINS=flink-s3-fs-presto-2.2.0.jar \
+        -Dcontainerized.master.env.ENABLE_BUILT_IN_PLUGINS="flink-s3-fs-presto-$(flink_version).jar" \
+        -Dcontainerized.taskmanager.env.ENABLE_BUILT_IN_PLUGINS="flink-s3-fs-presto-$(flink_version).jar" \
         -Djobmanager.archive.fs.dir=s3://test-flink/flink-events/ \
         -Ds3.access-key="$S3_ACCESS_KEY" \
         -Ds3.secret-key="$S3_SECRET_KEY" \

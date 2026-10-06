@@ -37,8 +37,13 @@ sudo apt install podman
 
 ```bash
 rockcraft pack
-podman load < charmed-flink_2.2.0_amd64.rock
-podman run -it --rm --name flink --entrypoint /bin/bash localhost/2.2.0:latest
+podman load < charmed-flink_2.3.0_amd64.rock
+podman run -it --rm --name flink --entrypoint /bin/bash localhost/2.3.0:latest
+
+# or
+
+rockcraft.skopeo copy oci-archive:charmed-flink_2.3.0_amd64.rock docker-daemon:flink-2.3.0:latest
+docker run -it --rm --name flink --entrypoint /bin/bash flink-2.3.0:latest
 ```
 
 ## Licence statement

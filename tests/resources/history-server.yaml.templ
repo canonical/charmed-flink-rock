@@ -20,7 +20,7 @@ spec:
           args: ["history-server"]
           env:
             - name: ENABLE_BUILT_IN_PLUGINS
-              value: "flink-s3-fs-presto-2.2.0.jar"
+              value: "flink-s3-fs-presto-2.3.0.jar"
             - name: FLINK_PROPERTIES
               value: |
                 historyserver.archive.fs.dir: s3://test-flink/flink-events/

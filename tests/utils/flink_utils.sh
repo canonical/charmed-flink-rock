@@ -2,7 +2,7 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-get_flink_version() {
+flink_version() {
     # Extract flink version from rockcraft
 
     yq '(.version)' rockcraft.yaml
